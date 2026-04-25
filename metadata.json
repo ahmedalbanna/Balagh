@@ -1,0 +1,14 @@
+{
+  "name": "بلّغ - صوتك يوصل",
+  "description": "منصة مجتمعية للإبلاغ عن المشاكل الخدمية في الأحياء وتحسين التواصل بين المواطن والجهات المسؤولة.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "AI-powered classification",
+    "Real-time mapping",
+    "Voice reporting"
+  ]
+}

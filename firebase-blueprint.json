@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "Report": {
+      "title": "Service Report",
+      "description": "A report filed by a citizen regarding a service issue.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the citizen who filed the report." },
+        "category": { "type": "string", "enum": ["pothole", "garbage", "sewage", "lighting", "other"] },
+        "description": { "type": "string", "description": "AI-generated or user-provided summary of the issue." },
+        "voiceUrl": { "type": "string", "format": "uri", "description": "URL to the voice recording (optional)." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "URL to the image captured (optional)." },
+        "resolvedImageUrl": { "type": "string", "format": "uri", "description": "URL to the image after resolution (optional)." },
+        "status": { "type": "string", "enum": ["pending", "acknowledged", "in_progress", "resolved"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "address": { "type": "string" }
+          }
+        },
+        "neighborhoodId": { "type": "string" },
+        "supportCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "status", "createdAt"]
+    },
+    "Support": {
+      "title": "Report Endorsement",
+      "description": "An endorsement from another citizen for an existing report.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "reportId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Public profile for a user.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "neighborhoodId": { "type": "string" },
+        "role": { "type": "string", "enum": ["citizen", "authority"] }
+      }
+    }
+  },
+  "firestore": {
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Collection of all service reports."
+    },
+    "/reports/{reportId}/supports/{supportId}": {
+      "schema": "Support",
+      "description": "Subcollection of endorsements for a specific report."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile information."
+    }
+  }
+}

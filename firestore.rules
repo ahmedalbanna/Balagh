@@ -1,0 +1,115 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role Lookup
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isAuthority() {
+      return isSignedIn() && getUserData(request.auth.uid).role == 'authority';
+    }
+
+    // --- Entity Validations ---
+
+    function isValidReport(data) {
+      return data.userId == request.auth.uid 
+        && data.category in ['pothole', 'garbage', 'sewage', 'lighting', 'other']
+        && data.status in ['pending', 'acknowledged', 'in_progress', 'resolved']
+        && data.priority in ['low', 'medium', 'high', 'critical']
+        && (data.description is string && data.description.size() <= 2000)
+        && (data.voiceUrl == null || (data.voiceUrl is string && data.voiceUrl.size() <= 1000))
+        && (data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (data.resolvedImageUrl == null || (data.resolvedImageUrl is string && data.resolvedImageUrl.size() <= 1000))
+        && data.location is map
+        && data.location.lat is number
+        && data.location.lng is number
+        && data.createdAt == request.time;
+    }
+
+    function isValidUser(data) {
+      return data.displayName is string && data.displayName.size() <= 100
+        && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1000))
+        && data.role in ['citizen', 'authority'];
+    }
+
+    function isValidSupport(data) {
+      return data.userId == request.auth.uid
+        && data.reportId is string
+        && data.createdAt == request.time;
+    }
+
+    // --- Rules for Collections ---
+
+    // Users
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if false; // No blanket listing of users
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) 
+        && incoming().role == existing().role; // Users can't change their own role
+    }
+
+    // Reports
+    match /reports/{reportId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); // Citizens can see reports around them, but in rules we check existing() for efficiency if possible
+      
+      // Create: Any verified user can create a report
+      allow create: if isEmailVerified() && isValidId(reportId) && isValidReport(incoming());
+      
+      // Update:
+      // 1. Authorities can update status, priority, and resolvedImageUrl
+      // 2. Citizens can update description (if it's their own)
+      // 3. System handles supportCount increments via transactions (but rules must allow it)
+      allow update: if isEmailVerified() && (
+        (isAuthority() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'resolvedImageUrl', 'updatedAt']))
+        || (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'updatedAt']))
+        || (incoming().diff(existing()).affectedKeys().hasOnly(['supportCount', 'updatedAt'])) // For endorsements
+      );
+    }
+
+    // Supports
+    match /reports/{reportId}/supports/{supportId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(supportId) && isValidSupport(incoming())
+        && exists(/databases/$(database)/documents/reports/$(reportId));
+      allow delete: if isOwner(existing().userId);
+    }
+  }
+}
