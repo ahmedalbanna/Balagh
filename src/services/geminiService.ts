@@ -6,33 +6,46 @@ export async function classifyReport(description: string, voiceBase64?: string, 
   const parts: any[] = [];
   
   let prompt = `
-    You are an AI reporting assistant for a city service app called "Ballagh" (بلغ).
-    Analyze the following report and categorize it.
+    You are an AI reporting assistant for a city service app called "Ballagh" (بلغ) specifically formulated for Yemeni citizens.
+    Analyze the following report and categorize it. The user might use Yemeni dialects.
     
-    Categories: "pothole", "garbage", "sewage", "lighting", "other".
-    Priority: "low", "medium", "high", "critical".
+    If audio is provided, listen to the audio carefully. The text description might be empty or a rough transcription.
+    
+    Categories: "pothole" (حفر), "garbage" (قمامة/مخلفات), "sewage" (صرف صحي/مجاري), "lighting" (إنارة/كهرباء), "other" (أخرى).
+    Priority guidelines:
+    - "critical": Imminent danger to life/property (e.g., open deep manhole, sparking exposed wires, severe flooding).
+    - "high": Major inconvenience or spreading hazard (e.g., huge garbage pile blocking road, large deep pothole crashing cars).
+    - "medium": Standard service issue (e.g., street light out, moderate garbage).
+    - "low": Minor issue.
 
-    User Description: "${description}"
+    User Description Text: "${description}"
   `;
 
   parts.push({ text: prompt });
 
   if (imageBase64) {
+    const mimeType = imageBase64.startsWith("data:image/png") ? "image/png" : "image/jpeg";
+    const data = imageBase64.split(",")[1] || imageBase64;
     parts.push({
       inlineData: {
-        mimeType: "image/jpeg",
-        data: imageBase64
+        mimeType: mimeType,
+        data: data
       }
     });
   }
 
-  // Voice analysis is harder with plain Gemini if it's just raw audio bytes, 
-  // but if we have the text from speech-to-text on the client, it's better.
-  // For now, let's assume we pass the transcription from the client or 
-  // if not possible, just use the description and image.
+  if (voiceBase64) {
+    const data = voiceBase64.split(",")[1] || voiceBase64;
+    parts.push({
+      inlineData: {
+        mimeType: "audio/webm", // assuming webm for web audio captures
+        data: data
+      }
+    });
+  }
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3.1-pro-preview", // Use pro for audio/multimodal
     contents: { parts },
     config: {
       responseMimeType: "application/json",
@@ -41,7 +54,7 @@ export async function classifyReport(description: string, voiceBase64?: string, 
         properties: {
           category: { type: "string" },
           priority: { type: "string" },
-          summary: { type: "string", description: "A concise summary of the issue." }
+          summary: { type: "string", description: "A concise summary of the issue in formal Arabic." }
         },
         required: ["category", "priority", "summary"]
       }
