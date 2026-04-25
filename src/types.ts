@@ -26,6 +26,12 @@ export interface Location {
   address?: string;
 }
 
+export interface ReportRating {
+  score: number;
+  comment?: string;
+  voiceUrl?: string;
+}
+
 export interface Report {
   id: string;
   userId: string;
@@ -41,6 +47,7 @@ export interface Report {
   supportCount: number;
   createdAt: any;
   updatedAt?: any;
+  rating?: ReportRating;
 }
 
 export interface UserProfile {
@@ -49,4 +56,6 @@ export interface UserProfile {
   photoURL?: string;
   role: 'citizen' | 'authority';
   neighborhoodId?: string;
+  points?: number;
+  tier?: string;
 }

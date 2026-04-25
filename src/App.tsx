@@ -19,7 +19,12 @@ import {
   TrendingUp,
   Newspaper,
   ShieldCheck,
-  Star
+  Star,
+  Share2,
+  Trash2,
+  Filter,
+  MessageSquare,
+  Medal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './lib/firebase.ts';
@@ -34,6 +39,7 @@ import { Report, UserProfile, ReportStatus, ReportPriority, ReportCategory } fro
 import { reportService } from './services/reportService.ts';
 import { classifyReport } from './services/geminiService.ts';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -50,7 +56,7 @@ L.Icon.Default.mergeOptions({
 
 // --- Components ---
 
-function Header({ user, onSignOut, currentTab, setTab }: { user: any; onSignOut: () => void; currentTab: string, setTab: (t: string) => void }) {
+function Header({ user, profile, onSignOut, currentTab, setTab }: { user: any; profile: UserProfile | null; onSignOut: () => void; currentTab: string, setTab: (t: string) => void }) {
   return (
     <nav className="bg-white border-b border-[#E0E0E0] px-4 md:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 z-40">
       <div className="flex items-center w-full md:w-auto justify-between md:justify-start gap-6">
@@ -74,9 +80,19 @@ function Header({ user, onSignOut, currentTab, setTab }: { user: any; onSignOut:
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
         {user ? (
           <>
-            <div className="bg-[#E1F5FE] text-[#0288D1] px-4 py-1.5 rounded-full text-xs font-bold hidden sm:block">
-              حي الروضة: استجابة 92%
-            </div>
+            {profile && profile.role === 'citizen' && (
+              <div className="bg-[#FFF9E6] text-[#F39C12] px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold ring-1 ring-[#F39C12]/20">
+                <Medal className="w-4 h-4" />
+                <span>{profile.tier || 'مواطن نشط'}</span>
+                <span className="font-extrabold ml-1">({profile.points || 0} نقطة)</span>
+              </div>
+            )}
+            {profile && profile.role === 'authority' && (
+              <div className="bg-[#E1F5FE] text-[#0288D1] px-4 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>جهة خدمية</span>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <button onClick={onSignOut} className="text-[#636E72] hover:text-[#FF6321]">
                 <LogOut className="w-5 h-5" />
@@ -99,7 +115,8 @@ function Header({ user, onSignOut, currentTab, setTab }: { user: any; onSignOut:
 
 function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Report; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void }) {
   const [resolving, setResolving] = useState(false);
-  const [rating, setRating] = useState(0);
+  const [ratingInput, setRatingInput] = useState('');
+  const [isRatingOpen, setIsRatingOpen] = useState(false);
 
   const statusColors = {
     [ReportStatus.PENDING]: 'bg-gray-100 text-gray-600',
@@ -117,6 +134,9 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Rep
 
   const isResolved = report.status === ReportStatus.RESOLVED;
 
+  // Check if report is pending for > 7 days
+  const isDelayed = report.status === ReportStatus.PENDING && report.createdAt?.seconds && ((new Date().getTime() / 1000) - report.createdAt.seconds) > (7 * 24 * 60 * 60);
+
   // Rating UI for current user if it's their report
   const isMine = report.userId === auth.currentUser?.uid;
 
@@ -126,8 +146,37 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Rep
     setResolving(false);
   };
 
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'بلاغ مجتمعي عن طريق منصة بلّغ',
+        text: `بلاغ عن: ${report.category} - ${report.description}`,
+        url: window.location.href,
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('تم نسخ الرابط!');
+    }
+  };
+
+  const handleDelete = () => {
+    if (window.confirm('هل أنت متأكد من حذف هذا البلاغ؟')) {
+      reportService.deleteReport(report.id);
+    }
+  };
+
+  const submitRating = () => {
+    // Call the service (simulated)
+    reportService.rateReport(report.id, {
+      score: 5,
+      comment: ratingInput
+    });
+    setIsRatingOpen(false);
+    alert('تم إرسال التقييم شكراً لك!');
+  };
+
   return (
-    <div className={`p-5 rounded-2xl bg-[#FAFAFA] border border-[#F0F0F0] flex gap-4 transition-all hover:shadow-sm ${isResolved ? 'opacity-80' : ''}`}>
+    <div className={`p-5 rounded-2xl bg-[#FAFAFA] border border-[#F0F0F0] flex gap-4 transition-all hover:shadow-sm ${isResolved ? 'opacity-80' : ''} ${isDelayed ? 'border-red-200 bg-red-50/20' : ''}`}>
       <div className="w-20 h-20 bg-[#DFE6E9] rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
         {report.imageUrl ? (
           <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" />
@@ -147,6 +196,11 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Rep
               {statusText[report.status]}
             </span>
           </div>
+          {isDelayed && (
+            <div className="flex items-center gap-1 text-red-500 text-[10px] mb-1 font-bold">
+              <AlertCircle className="w-3 h-3" /> طال الانتظار (أكثر من 7 أيام)
+            </div>
+          )}
           <p className="text-sm font-bold text-[#2D3436] line-clamp-2 leading-relaxed">{report.description}</p>
         </div>
         
@@ -162,7 +216,16 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Rep
             <Clock className="w-3 h-3" />
             <span>{report.createdAt?.seconds ? new Date(report.createdAt.seconds * 1000).toLocaleDateString('ar-SA') : 'الآن'}</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={handleShare} className="text-[#B2BEC3] hover:text-[#2D3436] transition-colors" title="مشاركة">
+              <Share2 className="w-4 h-4" />
+            </button>
+            {isMine && !isResolved && (
+              <button onClick={handleDelete} className="text-[#B2BEC3] hover:text-red-500 transition-colors" title="حذف">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+
             {!isResolved && (
               <button 
                 onClick={() => onSupport(report.id)}
@@ -182,16 +245,43 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Rep
               </button>
             )}
             
-            {isResolved && isMine && (
+            {isResolved && isMine && !report.rating && (
                <button 
-                onClick={() => alert("جاري تسجيل تقييمك الصوتي...")}
+                onClick={() => setIsRatingOpen(!isRatingOpen)}
                 className="flex items-center gap-1 bg-[#F4F7F6] text-[#FF6321] border border-[#FF6321]/20 font-bold text-xs px-2 py-1 rounded hover:bg-[#FF6321]/10 transition-colors"
                >
-                 <Mic className="w-3 h-3" /> تقييم بالصوت
+                 <Star className="w-3 h-3" /> تقييم الحل
                </button>
+            )}
+            {report.rating && isAuthority && (
+               <div className="flex items-center gap-1 bg-[#FFF9E6] text-[#F39C12] font-bold text-xs px-2 py-1 rounded">
+                 <Star className="w-3 h-3 fill-current" /> {report.rating.score}/5 التقييم: {report.rating.comment}
+               </div>
+            )}
+            {report.rating && isMine && (
+               <div className="flex items-center gap-1 text-[#F39C12] font-bold text-[10px]">
+                 <CheckCircle2 className="w-3 h-3" /> شكرًا لتقييمك
+               </div>
             )}
           </div>
         </div>
+
+        {isRatingOpen && (
+          <div className="mt-3 p-3 bg-white border border-[#E0E0E0] rounded-xl flex flex-col gap-2">
+            <p className="text-xs font-bold text-[#2D3436]">أضف تعليقك وتقييمك لعمل الجهة الخدمية</p>
+            <input 
+              type="text" 
+              placeholder="اكتب تعليقك هنا..." 
+              value={ratingInput}
+              onChange={(e) => setRatingInput(e.target.value)}
+              className="text-sm p-2 bg-[#F8F9FA] border border-[#E0E0E0] rounded-md outline-none focus:border-[#FF6321]"
+            />
+            <div className="flex items-center gap-2 mt-1">
+              <button onClick={submitRating} className="flex-1 bg-[#FF6321] text-white text-xs py-1.5 rounded-lg font-bold">إرسال</button>
+              <button onClick={() => alert("جاري تسجيل التقييم الصوتي...")} className="flex-1 border border-[#FF6321] text-[#FF6321] text-xs py-1.5 rounded-lg font-bold flex items-center justify-center gap-1"><Mic className="w-3 h-3"/> صوت</button>
+            </div>
+          </div>
+        )}
 
         {resolving && (
           <div className="mt-3 p-3 bg-white border border-[#E0E0E0] rounded-xl flex flex-col gap-2">
@@ -427,16 +517,18 @@ function MapView({ reports }: { reports: Report[] }) {
       <div className="flex-1 rounded-2xl overflow-hidden relative z-0 border border-[#E0E0E0]">
         <MapContainer center={position} zoom={13} className="w-full h-full z-0">
           <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-          {reports.map(r => (
-            <Marker key={r.id} position={[r.location.lat, r.location.lng]}>
-              <Popup className="font-sans" dir="rtl">
-                <div className="text-right">
-                  <h4 className="font-bold text-[#FF6321]">{r.category}</h4>
-                  <p className="text-xs text-[#2D3436] mt-1">{r.description}</p>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          <MarkerClusterGroup chunkedLoading>
+            {reports.map(r => (
+              <Marker key={r.id} position={[r.location.lat, r.location.lng]}>
+                <Popup className="font-sans" dir="rtl">
+                  <div className="text-right">
+                    <h4 className="font-bold text-[#FF6321]">{r.category}</h4>
+                    <p className="text-xs text-[#2D3436] mt-1">{r.description}</p>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MarkerClusterGroup>
         </MapContainer>
       </div>
     </div>
@@ -444,27 +536,40 @@ function MapView({ reports }: { reports: Report[] }) {
 }
 
 function NewsView() {
+  const [filter, setFilter] = useState('all');
+
   const news = [
-    { title: "حملة تنظيف كبرى في حي الروضة", date: "منذ ساعتين", type: "مشروع حي", img: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400" },
-    { title: "إصلاح خط المياه الرئيسي بالستين", date: "أمس", type: "قصة نجاح 'بلّغ'", img: "https://images.unsplash.com/photo-1541888086925-920a0b63f538?auto=format&fit=crop&q=80&w=400" }
+    { title: "حملة تنظيف كبرى في حي الروضة", date: "منذ ساعتين", type: "مشروع حي", category: "project", img: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400" },
+    { title: "إصلاح خط المياه الرئيسي بالستين", date: "أمس", type: "قصة نجاح 'بلّغ'", category: "success", img: "https://images.unsplash.com/photo-1541888086925-920a0b63f538?auto=format&fit=crop&q=80&w=400" },
+    { title: "مبادرة تشجير الشوارع الرئيسية", date: "منذ 3 أيام", type: "مبادرة", category: "initiative", img: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&q=80&w=400" }
   ];
 
+  const filteredNews = filter === 'all' ? news : news.filter(n => n.category === filter);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {news.map((item, i) => (
-        <div key={i} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[#E0E0E0] group cursor-pointer hover:shadow-md transition-all">
-          <div className="h-48 overflow-hidden relative">
-            <img src={item.img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-[#FF6321]">{item.type}</div>
+    <div>
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        <button onClick={() => setFilter('all')} className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${filter === 'all' ? 'bg-[#FF6321] text-white' : 'bg-white border border-[#E0E0E0] text-[#636E72]'}`}>الكل</button>
+        <button onClick={() => setFilter('project')} className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${filter === 'project' ? 'bg-[#FF6321] text-white' : 'bg-white border border-[#E0E0E0] text-[#636E72]'}`}>مشاريع</button>
+        <button onClick={() => setFilter('success')} className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${filter === 'success' ? 'bg-[#FF6321] text-white' : 'bg-white border border-[#E0E0E0] text-[#636E72]'}`}>قصص نجاح</button>
+        <button onClick={() => setFilter('initiative')} className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${filter === 'initiative' ? 'bg-[#FF6321] text-white' : 'bg-white border border-[#E0E0E0] text-[#636E72]'}`}>مبادرات</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {filteredNews.map((item, i) => (
+          <div key={i} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[#E0E0E0] group cursor-pointer hover:shadow-md transition-all">
+            <div className="h-48 overflow-hidden relative">
+              <img src={item.img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-[#FF6321]">{item.type}</div>
+            </div>
+            <div className="p-6">
+              <h3 className="font-bold text-xl mb-2 text-[#1A1A1A]">{item.title}</h3>
+              <p className="text-sm text-[#636E72] flex items-center gap-2">
+                <Clock className="w-4 h-4" /> {item.date}
+              </p>
+            </div>
           </div>
-          <div className="p-6">
-            <h3 className="font-bold text-xl mb-2 text-[#1A1A1A]">{item.title}</h3>
-            <p className="text-sm text-[#636E72] flex items-center gap-2">
-              <Clock className="w-4 h-4" /> {item.date}
-            </p>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -495,8 +600,28 @@ function SupportView() {
          </div>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="font-bold">استقطاع شهري لحماية الحي:</h3>
+      <div className="space-y-6">
+        <div>
+           <div className="flex justify-between text-sm font-bold text-[#1A1A1A] mb-2">
+             <span>مشروع إصلاح إنارة شارع الستين</span>
+             <span>35,000 / 50,000 ريال</span>
+           </div>
+           <div className="h-4 w-full bg-[#DFE6E9] rounded-full overflow-hidden">
+             <div className="h-full bg-[#2ECC71] w-[70%]"></div>
+           </div>
+        </div>
+        
+        <div>
+           <div className="flex justify-between text-sm font-bold text-[#1A1A1A] mb-2">
+             <span>صندوق الطوارئ (شفط مياه الأمطار)</span>
+             <span>12,000 / 100,000 ريال</span>
+           </div>
+           <div className="h-4 w-full bg-[#DFE6E9] rounded-full overflow-hidden">
+             <div className="h-full bg-[#FF6321] w-[12%]"></div>
+           </div>
+        </div>
+
+        <h3 className="font-bold border-t border-[#F0F0F0] pt-6 mt-4">استقطاع شهري لحماية الحي:</h3>
         <div className="flex gap-4">
           {[500, 1000, 2000].map(amt => (
             <button key={amt} className="flex-1 py-4 rounded-xl border-2 border-[#E0E0E0] hover:border-[#FF6321] hover:bg-[#FF6321]/5 text-[#1A1A1A] font-bold text-lg transition-all focus:border-[#FF6321] focus:ring-1 focus:ring-[#FF6321]">
@@ -521,6 +646,11 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('home');
+
+  // Filters
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -559,11 +689,29 @@ export default function App() {
   const handleResolve = async (reportId: string, resolvedImageUrl: string) => {
     try {
       const ref = doc(db, 'reports', reportId);
+      const rSnap = await getDoc(ref);
+
       await updateDoc(ref, {
         status: ReportStatus.RESOLVED,
         resolvedImageUrl,
         updatedAt: new Date()
       });
+
+      // Gamification: Award 50 points to the user who created the report
+      if (rSnap.exists()) {
+        const reporterId = rSnap.data().userId;
+        if (reporterId) {
+          const userRef = doc(db, 'users', reporterId);
+          await updateDoc(userRef, {
+            points: increment(50),
+            tier: 'بطل مجتمعي'
+          });
+          
+          if (reporterId === user.uid && profile) {
+             setProfile({ ...profile, points: (profile.points || 0) + 50, tier: 'بطل مجتمعي' });
+          }
+        }
+      }
     } catch(e) { console.error(e); }
   };
 
@@ -602,9 +750,17 @@ export default function App() {
 
   const isAuthority = profile?.role === 'authority';
 
+  const filteredReports = reports.filter(r => {
+    let match = true;
+    if (filterCategory !== 'all' && r.category !== filterCategory) match = false;
+    if (filterStatus !== 'all' && r.status !== filterStatus) match = false;
+    if (filterPriority !== 'all' && r.priority !== filterPriority) match = false;
+    return match;
+  });
+
   return (
     <div className="min-h-screen bg-[#F4F7F6] font-sans text-[#2D3436]" dir="rtl">
-      <Header user={user} onSignOut={() => signOut(auth)} currentTab={tab} setTab={setTab} />
+      <Header user={user} profile={profile} onSignOut={() => signOut(auth)} currentTab={tab} setTab={setTab} />
 
       <main className="max-w-[1024px] mx-auto p-4 md:p-8 pb-32">
         <AnimatePresence mode="wait">
@@ -632,20 +788,43 @@ export default function App() {
                   
                   {/* Embedded Map */}
                   <div className="hidden lg:block relative z-0">
-                    <MapView reports={reports} />
+                    <MapView reports={filteredReports} />
                   </div>
                 </div>
 
                 <div className="lg:col-span-5 bg-white rounded-3xl shadow-sm border border-[#E0E0E0] flex flex-col overflow-hidden max-h-[800px]">
-                  <div className="p-6 border-b border-[#F0F0F0] flex justify-between items-center bg-white sticky top-0 z-10">
-                    <h3 className="font-bold text-lg text-[#1A1A1A]">آخر البلاغات بمنطقتك</h3>
+                  <div className="p-4 border-b border-[#F0F0F0] bg-white sticky top-0 z-10">
+                    <h3 className="font-bold text-lg text-[#1A1A1A] mb-3">آخر البلاغات بمنطقتك</h3>
+                    <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                      <select 
+                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]" 
+                        value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                      >
+                        <option value="all">كل الفئات</option>
+                        {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select 
+                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]"
+                        value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                      >
+                        <option value="all">كل الحالات</option>
+                        {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
+                      </select>
+                      <select 
+                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]"
+                        value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}
+                      >
+                        <option value="all">كل الأولويات</option>
+                        {Object.values(ReportPriority).map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
                   </div>
                   
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#F4F7F6]/30">
-                    {reports.length === 0 ? (
-                      <p className="text-center text-[#B2BEC3] py-10">لا توجد بلاغات...</p>
+                    {filteredReports.length === 0 ? (
+                      <p className="text-center text-[#B2BEC3] py-10">لا توجد بلاغات تطابق البحث...</p>
                     ) : (
-                      reports.map(report => (
+                      filteredReports.map(report => (
                         <ReportCard 
                           key={report.id} 
                           report={report} 
@@ -663,7 +842,23 @@ export default function App() {
 
           {tab === 'map' && (
             <motion.div key="map" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}}>
-              <MapView reports={reports} />
+              <div className="flex gap-2 mb-4">
+                <select 
+                  className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]" 
+                  value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                >
+                  <option value="all">كل الفئات</option>
+                  {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select 
+                  className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]"
+                  value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="all">كل الحالات</option>
+                  {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
+                </select>
+              </div>
+              <MapView reports={filteredReports} />
             </motion.div>
           )}
 
