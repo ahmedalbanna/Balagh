@@ -150,5 +150,59 @@ export const reportService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `reports/${reportId}`);
     }
+  },
+
+  async seedDemoData() {
+    const demoReports: Partial<Report>[] = [
+      {
+        category: ReportCategory.POTHOLE,
+        description: "حفرة عميقة في شارع الستين تسبب أضرار للسيارات ويرجى ردمها بأسرع وقت.",
+        priority: ReportPriority.HIGH,
+        location: { lat: 15.3694, lng: 44.1910, address: 'صنعاء - الستين' },
+        neighborhoodId: 'sanaa_central',
+        imageUrl: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&q=80&w=800",
+        status: ReportStatus.PENDING,
+      },
+      {
+        category: ReportCategory.GARBAGE,
+        description: "تراكم كبير للقمامة خلف مدرسة القدس منذ أسبوع مما يسبب روائح كريهة.",
+        priority: ReportPriority.MEDIUM,
+        location: { lat: 15.3720, lng: 44.1950, address: 'صنعاء - الروضة' },
+        neighborhoodId: 'sanaa_rawda',
+        imageUrl: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400",
+        status: ReportStatus.ACKNOWLEDGED,
+      },
+      {
+        category: ReportCategory.LIGHTING,
+        description: "انقطاع الإنارة في شارع الجامعة، الشارع مظلم بالكامل منذ عدة أيام.",
+        priority: ReportPriority.CRITICAL,
+        location: { lat: 15.3650, lng: 44.1850, address: 'صنعاء - الجامعة' },
+        neighborhoodId: 'sanaa_university',
+        status: ReportStatus.IN_PROGRESS,
+      },
+      {
+        category: ReportCategory.SEWAGE,
+        description: "طفح مجاري مستمر في الحارة، الروائح مزعجة جداً والمياه تغمر الشارع.",
+        priority: ReportPriority.HIGH,
+        location: { lat: 15.3750, lng: 44.1900, address: 'صنعاء - الحصبة' },
+        neighborhoodId: 'sanaa_hasaba',
+        status: ReportStatus.RESOLVED,
+        resolvedImageUrl: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400"
+      }
+    ];
+
+    for (const report of demoReports) {
+      const reportsCol = collection(db, 'reports');
+      try {
+        await addDoc(reportsCol, {
+          ...report,
+          userId: auth.currentUser?.uid,
+          supportCount: Math.floor(Math.random() * 20),
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Error seeding report", error);
+      }
+    }
   }
 };

@@ -34,7 +34,7 @@ import {
   onAuthStateChanged, 
   signOut 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { Report, UserProfile, ReportStatus, ReportPriority, ReportCategory } from './types.ts';
 import { reportService } from './services/reportService.ts';
 import { classifyReport } from './services/geminiService.ts';
@@ -94,6 +94,15 @@ function Header({ user, profile, onSignOut, currentTab, setTab }: { user: any; p
               </div>
             )}
             <div className="flex items-center gap-3">
+              <button 
+                onClick={async () => {
+                  await reportService.seedDemoData();
+                  alert('تم إضافة البيانات التجريبية');
+                }} 
+                className="text-[#FF6321] bg-[#FF6321]/10 hover:bg-[#FF6321]/20 px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                توليد بيانات تجريبية
+              </button>
               <button onClick={onSignOut} className="text-[#636E72] hover:text-[#FF6321]">
                 <LogOut className="w-5 h-5" />
               </button>
@@ -694,7 +703,7 @@ export default function App() {
       await updateDoc(ref, {
         status: ReportStatus.RESOLVED,
         resolvedImageUrl,
-        updatedAt: new Date()
+        updatedAt: serverTimestamp()
       });
 
       // Gamification: Award 50 points to the user who created the report
