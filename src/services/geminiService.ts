@@ -54,9 +54,11 @@ export async function classifyReport(description: string, voiceBase64?: string, 
         properties: {
           category: { type: "string" },
           priority: { type: "string" },
-          summary: { type: "string", description: "A concise summary of the issue in formal Arabic." }
+          summary: { type: "string", description: "A concise summary of the issue in formal Arabic." },
+          transcription: { type: "string", description: "The full transcription of the audio input in Arabic." },
+          extractedLocation: { type: "string", description: "Any specific street or neighborhood mentioned in the report." }
         },
-        required: ["category", "priority", "summary"]
+        required: ["category", "priority", "summary", "transcription"]
       }
     }
   });

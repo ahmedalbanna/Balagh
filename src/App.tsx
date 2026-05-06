@@ -44,8 +44,11 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 // Fix leaflet icons
+// @ts-expect-error - image imports
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
+// @ts-expect-error - image imports
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+// @ts-expect-error - image imports
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 
 L.Icon.Default.mergeOptions({
@@ -313,6 +316,9 @@ function CreateReportModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const [voiceBase64, setVoiceBase64] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [transcription, setTranscription] = useState('');
+  const [extractedLocation, setExtractedLocation] = useState('');
+  const [aiData, setAiData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -348,7 +354,7 @@ function CreateReportModal({ onClose, onCreated }: { onClose: () => void; onCrea
       setRecording(true);
 
       // Start Speech Recognition
-      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.lang = 'ar-YE'; // Yemeni Arabic
@@ -396,14 +402,32 @@ function CreateReportModal({ onClose, onCreated }: { onClose: () => void; onCrea
     setLoading(true);
     try {
       const aiResponse = await classifyReport(description, voiceBase64 || undefined, photo || undefined);
-      
+      setAiData(aiResponse);
+      setTranscription(aiResponse.transcription || '');
+      setExtractedLocation(aiResponse.extractedLocation || '');
+      setStep(3); // Move to review step
+    } catch (error) {
+      console.error(error);
+      alert("حدث خطأ أثناء معالجة البلاغ. يرجى المحاولة لاحقاً.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFinalSubmit = async () => {
+    setLoading(true);
+    try {
       const newReport: Partial<Report> = {
-        category: aiResponse.category as ReportCategory || ReportCategory.OTHER,
-        description: aiResponse.summary || description || "بدون وصف",
-        priority: aiResponse.priority as ReportPriority || ReportPriority.MEDIUM,
+        category: aiData?.category as ReportCategory || ReportCategory.OTHER,
+        description: aiData?.summary || description || transcription || "بدون وصف",
+        priority: aiData?.priority as ReportPriority || ReportPriority.MEDIUM,
         imageUrl: photo || undefined,
-        voiceUrl: audioUrl || undefined, // In real app, upload this to Storage first
-        location: { lat: 15.3694 + (Math.random()*0.02 - 0.01), lng: 44.1910 + (Math.random()*0.02 - 0.01), address: 'صنعاء - الروضة' },
+        voiceUrl: audioUrl || undefined,
+        location: { 
+          lat: 15.3694 + (Math.random()*0.02 - 0.01), 
+          lng: 44.1910 + (Math.random()*0.02 - 0.01), 
+          address: extractedLocation || 'صنعاء - الروضة' 
+        },
         neighborhoodId: 'sanaa_rawda',
         status: ReportStatus.PENDING
       };
@@ -493,6 +517,66 @@ function CreateReportModal({ onClose, onCreated }: { onClose: () => void; onCrea
               </button>
             </div>
           )}
+          {step === 3 && (
+             <div className="flex flex-col gap-4">
+                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-2">
+                  <h4 className="font-bold text-blue-700 text-sm mb-2 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" /> تم التعرف على البلاغ آلياً
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] text-blue-500 font-bold uppercase">التقرير الصوتي</p>
+                      <p className="text-sm text-blue-900 leading-relaxed">"{transcription || description}"</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <p className="text-[10px] text-blue-500 font-bold uppercase">الفئة</p>
+                        <p className="text-xs font-bold text-blue-900">{aiData?.category}</p>
+                      </div>
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <p className="text-[10px] text-blue-500 font-bold uppercase">الأولوية</p>
+                        <p className="text-xs font-bold text-blue-900">{aiData?.priority}</p>
+                      </div>
+                    </div>
+                    {extractedLocation && (
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <p className="text-[10px] text-blue-500 font-bold uppercase">الموقع المذكور</p>
+                        <p className="text-xs font-bold text-blue-900">{extractedLocation}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleFinalSubmit}
+                  disabled={loading}
+                  className="w-full bg-[#FF6321] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-[#FF6321]/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                >
+                  {loading ? 'جاري الإرسال...' : 'تأكيد وإرسال البلاغ'}
+                </button>
+                <button onClick={() => setStep(2)} className="text-sm text-gray-500 font-bold">تعديل البلاغ</button>
+             </div>
+          )}
+
+          <div className="mt-8 pt-6 border-t border-[#F0F0F0] text-center">
+             <p className="text-[#636E72] text-[10px] mb-4">يمكنك أيضاً البلاغ عبر القنوات البديلة (قريباً):</p>
+             <div className="flex justify-center gap-4">
+                <div className="flex flex-col items-center gap-1 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-help" title="خدمة قادمة">
+                  <div className="w-8 h-8 bg-[#25D366] rounded-full flex items-center justify-center text-white">
+                    <MessageSquare className="w-4 h-4 fill-current" />
+                  </div>
+                  <span className="text-[9px] font-bold">واتساب</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 opacity-50 grayscale">
+                  <div className="w-8 h-8 bg-[#3498DB] rounded-full flex items-center justify-center text-white font-bold text-xs">SMS</div>
+                  <span className="text-[9px] font-bold">رسائل نصية</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 opacity-50 grayscale">
+                  <div className="w-8 h-8 bg-[#9B59B6] rounded-full flex items-center justify-center text-white font-bold text-xs">*USSD</div>
+                  <span className="text-[9px] font-bold">أكواد الاتصال</span>
+                </div>
+             </div>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -849,8 +933,8 @@ export default function App() {
                       filteredReports.map(report => (
                         <ReportCard 
                           key={report.id} 
-                          report={report} 
-                          onSupport={(id) => reportService.supportReport(id)} 
+                          report={report as Report} 
+                          onSupport={(id) => { reportService.supportReport(id).catch(console.error); }} 
                           isAuthority={isAuthority}
                           onResolve={handleResolve}
                         />
