@@ -1,127 +1,90 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    match /test/connection {
-      allow get: if true;
-    }
-
-    // --- Helper Functions ---
-    function isSignedIn() {
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isEmailVerified() {
-      return isSignedIn(); // Relaxed for AI Studio preview environment
+    function existing() { return resource.data; }
+    function incoming() { return request.resource.data; }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    // Role Lookup
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
+    // Role checks
     function isAuthority() {
-      return isSignedIn() && getUserData(request.auth.uid).role == 'authority';
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'authority';
     }
 
-    // --- Entity Validations ---
-
-    function isValidReport(data) {
-      return data.userId == request.auth.uid 
-        && data.category in ['pothole', 'garbage', 'sewage', 'lighting', 'other']
-        && data.status in ['pending', 'acknowledged', 'in_progress', 'resolved']
-        && data.priority in ['low', 'medium', 'high', 'critical']
-        && (data.description is string && data.description.size() <= 2000)
-        && (data.get('voiceUrl', null) == null || (data.get('voiceUrl', '') is string && data.get('voiceUrl', '').size() <= 1000))
-        && (data.get('imageUrl', null) == null || (data.get('imageUrl', '') is string && data.get('imageUrl', '').size() <= 1000))
-        && (data.get('resolvedImageUrl', null) == null || (data.get('resolvedImageUrl', '') is string && data.get('resolvedImageUrl', '').size() <= 1000))
-        && (data.get('neighborhoodId', null) == null || (data.get('neighborhoodId', '') is string && data.get('neighborhoodId', '').size() <= 100))
-        && (data.get('supportCount', 0) is number)
-        && data.location is map
-        && data.location.lat is number
-        && data.location.lng is number
-        && data.createdAt == request.time;
-    }
-
+    // Users Collection
     function isValidUser(data) {
-      return data.displayName is string && data.displayName.size() <= 100
-        && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1000))
-        && data.role in ['citizen', 'authority']
-        && (data.get('points', 0) is number)
-        && (data.get('tier', null) == null || (data.get('tier', '') is string && data.get('tier', '').size() <= 100))
-        && (data.get('neighborhoodId', null) == null || (data.get('neighborhoodId', '') is string && data.get('neighborhoodId', '').size() <= 100));
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.role in ['citizen', 'authority'] &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.createdAt is string;
     }
 
-    function isValidSupport(data) {
-      return data.userId == request.auth.uid
-        && data.reportId is string
-        && data.createdAt == request.time;
-    }
-
-    // --- Rules for Collections ---
-
-    // Users
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if false; // No blanket listing of users
-      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow get: if isAuthenticated() && isValidId(userId);
+      allow list: if false; // No blanket reads for users.
       
-      // Allow user themselves or an authority to update their points/tier. Role is immutable.
-      allow update: if (isOwner(userId) || isAuthority()) && isValidUser(incoming()) 
-        && incoming().role == existing().role;
+      allow create: if isAuthenticated() && isValidId(userId) && userId == request.auth.uid && 
+                    isValidUser(incoming()) && incoming().role == 'citizen';
+                    
+      allow update: if isAuthenticated() && isValidId(userId) && userId == request.auth.uid &&
+                    isValidUser(incoming()) &&
+                    incoming().role == existing().role &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'neighborhoodId', 'tier', 'points']);
     }
 
-    // Reports
+    // Reports Collection
+    function isValidReport(data) {
+      return data.keys().hasAll(['userId', 'category', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.category in ["pothole", "garbage", "sewage", "lighting", "other"] &&
+             data.status in ["pending", "acknowledged", "in_progress", "resolved"] &&
+             data.createdAt is timestamp;
+    }
+
     match /reports/{reportId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn(); // Citizens can see reports around them, but in rules we check existing() for efficiency if possible
+      // Community reporting is public data by design, so blanket read is permitted.
+      allow get: if isAuthenticated() && isValidId(reportId);
+      allow list: if isAuthenticated(); 
       
-      // Create: Any verified user can create a report
-      allow create: if isEmailVerified() && isValidId(reportId) && isValidReport(incoming());
-      
-      // Update:
-      // 1. Authorities can update status, priority, and resolvedImageUrl
-      // 2. Citizens can update description (if it's their own)
-      // 3. System handles supportCount increments via transactions (but rules must allow it)
-      allow update: if isEmailVerified() && (
-        (isAuthority() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'resolvedImageUrl', 'updatedAt']))
-        || (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'updatedAt']))
-        || (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'updatedAt']))
-        || (incoming().diff(existing()).affectedKeys().hasOnly(['supportCount', 'updatedAt'])) // For endorsements
+      allow create: if isAuthenticated() && isValidId(reportId) && isValidReport(incoming()) && 
+                    incoming().status == 'pending' && 
+                    // To prevent Denial of Wallet we check string limits
+                    (!('description' in incoming()) || (incoming().description is string && incoming().description.size() <= 3000));
+                    
+      allow update: if isAuthenticated() && isValidId(reportId) && (
+        // Action: Authority updates status
+        (isAuthority() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolvedImageUrl', 'priority', 'updatedAt'])) ||
+        // Action: Citizen supports report
+        (incoming().diff(existing()).affectedKeys().hasOnly(['supportCount', 'updatedAt']) && 
+         incoming().supportCount == existing().supportCount + 1 &&
+         existsAfter(/databases/$(database)/documents/reports/$(reportId)/supports/$(request.auth.uid))) ||
+        // Action: Citizen rates solution
+        (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'updatedAt']))
       );
     }
 
-    // Supports
+    // Supports Subcollection
     match /reports/{reportId}/supports/{supportId} {
-      allow read: if isSignedIn();
-      allow create: if isEmailVerified() && isValidId(supportId) && isValidSupport(incoming())
-        && exists(/databases/$(database)/documents/reports/$(reportId));
-      allow delete: if isOwner(existing().userId);
+      allow get: if isAuthenticated() && isValidId(reportId) && isValidId(supportId);
+      allow list: if isAuthenticated() && isValidId(reportId);
+      allow create: if isAuthenticated() && isValidId(reportId) && isValidId(supportId) &&
+                    supportId == request.auth.uid && 
+                    incoming().keys().hasAll(['userId', 'reportId', 'createdAt']) &&
+                    incoming().userId == request.auth.uid &&
+                    incoming().reportId == reportId &&
+                    incoming().createdAt is timestamp;
     }
   }
 }

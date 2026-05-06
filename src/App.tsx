@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { cn } from './lib/utils.ts';
 import { 
   Plus, 
   Map as MapIcon, 
@@ -61,250 +62,280 @@ L.Icon.Default.mergeOptions({
 
 function Header({ user, profile, onSignOut, currentTab, setTab }: { user: any; profile: UserProfile | null; onSignOut: () => void; currentTab: string, setTab: (t: string) => void }) {
   return (
-    <nav className="bg-white border-b border-[#E0E0E0] px-4 md:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 z-40">
-      <div className="flex items-center w-full md:w-auto justify-between md:justify-start gap-6">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setTab('home')}>
-          <div className="w-10 h-10 bg-[#FF6321] rounded-xl flex items-center justify-center shadow-sm">
-            <Bell className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1A1A1A]">بلّغ</h1>
-        </div>
-        
-        {user && (
-          <div className="hidden md:flex gap-6 text-sm font-medium text-[#636E72]">
-            <button onClick={() => setTab('home')} className={`${currentTab === 'home' ? 'text-[#FF6321] border-b-2 border-[#FF6321]' : 'hover:text-[#2D3436]'} pb-1 transition-colors`}>الرئيسية</button>
-            <button onClick={() => setTab('map')} className={`${currentTab === 'map' ? 'text-[#FF6321] border-b-2 border-[#FF6321]' : 'hover:text-[#2D3436]'} pb-1 transition-colors`}>خريطة المشاكل</button>
-            <button onClick={() => setTab('news')} className={`${currentTab === 'news' ? 'text-[#FF6321] border-b-2 border-[#FF6321]' : 'hover:text-[#2D3436]'} pb-1 transition-colors`}>الأخبار</button>
-            <button onClick={() => setTab('support')} className={`${currentTab === 'support' ? 'text-[#FF6321] border-b-2 border-[#FF6321]' : 'hover:text-[#2D3436]'} pb-1 transition-colors`}>الدعم المجتمعي</button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-        {user ? (
-          <>
-            {profile && profile.role === 'citizen' && (
-              <div className="bg-[#FFF9E6] text-[#F39C12] px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold ring-1 ring-[#F39C12]/20">
-                <Medal className="w-4 h-4" />
-                <span>{profile.tier || 'مواطن نشط'}</span>
-                <span className="font-extrabold ml-1">({profile.points || 0} نقطة)</span>
-              </div>
-            )}
-            {profile && profile.role === 'authority' && (
-              <div className="bg-[#E1F5FE] text-[#0288D1] px-4 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
-                <ShieldCheck className="w-4 h-4" />
-                <span>جهة خدمية</span>
-              </div>
-            )}
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={async () => {
-                  await reportService.seedDemoData();
-                  alert('تم إضافة البيانات التجريبية');
-                }} 
-                className="text-[#FF6321] bg-[#FF6321]/10 hover:bg-[#FF6321]/20 px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
-              >
-                توليد بيانات تجريبية
-              </button>
-              <button onClick={onSignOut} className="text-[#636E72] hover:text-[#FF6321]">
-                <LogOut className="w-5 h-5" />
-              </button>
-              <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-[#DFE6E9]" />
+    <nav className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/60">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex justify-between items-center h-16 md:h-20">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setTab('home')}>
+            <div className="w-10 h-10 bg-brand-orange rounded-xl flex items-center justify-center shadow-lg shadow-brand-orange/25 group-hover:scale-105 transition-transform duration-300">
+              <Bell className="w-5 h-5 text-white" />
             </div>
-          </>
-        ) : (
-          <button 
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
-            className="bg-[#FF6321] text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-[#E55A1F] transition-all shadow-sm"
-          >
-            تسجيل الدخول
-          </button>
-        )}
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">بلّغ</h1>
+              <span className="text-[10px] text-slate-500 font-medium tracking-wide">صوتك يوصل</span>
+            </div>
+          </div>
+          
+          {user && (
+            <div className="hidden md:flex items-center gap-1">
+              {[
+                { id: 'home', label: 'الرئيسية' },
+                { id: 'map', label: 'الخريطة' },
+                { id: 'news', label: 'الأخبار' },
+                { id: 'support', label: 'الدعم' },
+              ].map((item) => (
+                <button 
+                  key={item.id}
+                  onClick={() => setTab(item.id)} 
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 relative",
+                    currentTab === item.id 
+                      ? "text-brand-orange" 
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                  )}
+                >
+                  {item.label}
+                  {currentTab === item.id && (
+                    <motion.div 
+                      layoutId="nav-underline" 
+                      className="absolute bottom-0 left-4 right-4 h-0.5 bg-brand-orange rounded-full" 
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          {user ? (
+            <div className="flex items-center gap-3 md:gap-5">
+              {profile && profile.role === 'citizen' && (
+                <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full">
+                  <Medal className="w-4 h-4 text-brand-orange" />
+                  <span className="text-xs font-bold text-slate-700">{profile.points || 0} نقطة</span>
+                </div>
+              )}
+              {profile && profile.role === 'authority' && (
+                <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold border border-blue-100">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">جهة خدمية</span>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex flex-col items-end mr-1">
+                  <span className="text-[10px] font-bold text-slate-900 leading-none mb-0.5">{profile?.displayName}</span>
+                  <span className="text-[9px] text-slate-500 font-medium leading-none">{profile?.tier || 'مواطن'}</span>
+                </div>
+                <div className="relative group">
+                  <img src={user.photoURL || ''} alt="" className="w-9 h-9 rounded-full border-2 border-white ring-1 ring-slate-200 shadow-sm transition-transform group-hover:scale-105" />
+                </div>
+                <button 
+                  onClick={onSignOut} 
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="تسجيل الخروج"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button 
+              onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
+              className="bg-brand-orange text-white px-6 py-2.5 rounded-xl text-sm font-extrabold hover:bg-brand-orange-hover transition-all shadow-lg shadow-brand-orange/20 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              تسجيل الدخول
+            </button>
+          )}
+        </div>
       </div>
     </nav>
   );
 }
 
-function ReportCard({ report, onSupport, isAuthority, onResolve }: { report: Report; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void }) {
+function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: string | number; report: Report; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void }) {
   const [resolving, setResolving] = useState(false);
   const [ratingInput, setRatingInput] = useState('');
   const [isRatingOpen, setIsRatingOpen] = useState(false);
 
   const statusColors = {
-    [ReportStatus.PENDING]: 'bg-gray-100 text-gray-600',
-    [ReportStatus.ACKNOWLEDGED]: 'bg-blue-50 text-blue-600',
-    [ReportStatus.IN_PROGRESS]: 'bg-yellow-100 text-yellow-700',
-    [ReportStatus.RESOLVED]: 'bg-[#E8F5E9] text-[#2ECC71]'
+    [ReportStatus.PENDING]: 'bg-rose-50 text-rose-600 border-rose-100',
+    [ReportStatus.ACKNOWLEDGED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    [ReportStatus.IN_PROGRESS]: 'bg-amber-50 text-amber-700 border-amber-100',
+    [ReportStatus.RESOLVED]: 'bg-emerald-50 text-emerald-600 border-emerald-100'
   };
 
   const statusText = {
-    [ReportStatus.PENDING]: 'مفتوح',
+    [ReportStatus.PENDING]: 'جديد',
     [ReportStatus.ACKNOWLEDGED]: 'تم الاستلام',
-    [ReportStatus.IN_PROGRESS]: 'قيد العمل',
-    [ReportStatus.RESOLVED]: 'تمت المعالجة'
+    [ReportStatus.IN_PROGRESS]: 'جاري المعالجة',
+    [ReportStatus.RESOLVED]: 'تم الحل'
   };
 
   const isResolved = report.status === ReportStatus.RESOLVED;
-
-  // Check if report is pending for > 7 days
   const isDelayed = report.status === ReportStatus.PENDING && report.createdAt?.seconds && ((new Date().getTime() / 1000) - report.createdAt.seconds) > (7 * 24 * 60 * 60);
-
-  // Rating UI for current user if it's their report
   const isMine = report.userId === auth.currentUser?.uid;
 
-  const handleResolveSubmit = () => {
-    // Mock image for now
-    onResolve(report.id, "https://images.unsplash.com/photo-1574686020524-192a543666b3?auto=format&fit=crop&q=80&w=400");
-    setResolving(false);
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: 'بلاغ مجتمعي عن طريق منصة بلّغ',
-        text: `بلاغ عن: ${report.category} - ${report.description}`,
-        url: window.location.href,
-      }).catch(console.error);
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('تم نسخ الرابط!');
-    }
-  };
-
-  const handleDelete = () => {
-    if (window.confirm('هل أنت متأكد من حذف هذا البلاغ؟')) {
-      reportService.deleteReport(report.id);
-    }
-  };
-
-  const submitRating = () => {
-    // Call the service (simulated)
-    reportService.rateReport(report.id, {
-      score: 5,
-      comment: ratingInput
-    });
-    setIsRatingOpen(false);
-    alert('تم إرسال التقييم شكراً لك!');
-  };
-
   return (
-    <div className={`p-5 rounded-2xl bg-[#FAFAFA] border border-[#F0F0F0] flex gap-4 transition-all hover:shadow-sm ${isResolved ? 'opacity-80' : ''} ${isDelayed ? 'border-red-200 bg-red-50/20' : ''}`}>
-      <div className="w-20 h-20 bg-[#DFE6E9] rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
-        {report.imageUrl ? (
-          <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" />
-        ) : (
-          <ImageIcon className="w-8 h-8 text-[#BDC3C7]" />
-        )}
-      </div>
-      
-      <div className="flex-1 flex flex-col justify-between">
-        <div>
-          <div className="flex justify-between items-start mb-1">
-            <span className="text-xs font-bold text-[#636E72] flex items-center gap-1">
-              {report.priority === ReportPriority.CRITICAL && <AlertCircle className="w-3 h-3 text-red-500" />}
-              {report.category}
-            </span>
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusColors[report.status]}`}>
+    <div className={cn(
+      "group relative p-5 rounded-3xl bg-white border border-slate-100 flex flex-col gap-4 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/40 hover:border-slate-200",
+      isResolved && "bg-slate-50/50 grayscale-[0.3]",
+      isDelayed && "border-rose-200 bg-rose-50/10"
+    )}>
+      <div className="flex gap-5">
+        <div className="w-24 h-24 bg-slate-100 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200/50 group-hover:scale-[1.02] transition-transform duration-300">
+          {report.imageUrl ? (
+            <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" />
+          ) : (
+            <ImageIcon className="w-8 h-8 text-slate-300" />
+          )}
+        </div>
+        
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex justify-between items-start mb-2 gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                {report.priority === ReportPriority.CRITICAL && <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />}
+                {report.category}
+              </span>
+              <h4 className="text-base font-bold text-slate-900 leading-tight line-clamp-1 group-hover:text-brand-orange transition-colors">
+                {report.description}
+              </h4>
+            </div>
+            <span className={cn(
+              "px-2.5 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap",
+              statusColors[report.status]
+            )}>
               {statusText[report.status]}
             </span>
           </div>
+
           {isDelayed && (
-            <div className="flex items-center gap-1 text-red-500 text-[10px] mb-1 font-bold">
-              <AlertCircle className="w-3 h-3" /> طال الانتظار (أكثر من 7 أيام)
+            <div className="flex items-center gap-1.5 text-rose-500 text-[10px] mb-2 font-bold bg-rose-50 w-fit px-2 py-0.5 rounded-md">
+              <AlertCircle className="w-3 h-3" /> بلاغ متأخر
             </div>
           )}
-          <p className="text-sm font-bold text-[#2D3436] line-clamp-2 leading-relaxed">{report.description}</p>
-        </div>
-        
-        {isResolved && report.resolvedImageUrl && (
-          <div className="mt-2 mb-2 p-2 bg-[#E8F5E9] rounded-lg flex items-center gap-2">
-            <img src={report.resolvedImageUrl} className="w-10 h-10 rounded object-cover" />
-            <span className="text-xs font-bold text-[#2ECC71]">تمت المعالجة من قبل البلدية</span>
-          </div>
-        )}
+          
+          {isResolved && report.resolvedImageUrl && (
+            <div className="mt-2 mb-3 p-2 bg-emerald-50 rounded-2xl flex items-center gap-3 border border-emerald-100">
+              <img src={report.resolvedImageUrl} className="w-12 h-12 rounded-xl object-cover border border-emerald-200" />
+              <div className="flex flex-col">
+                <span className="text-xs font-extrabold text-emerald-700">تم الإنجاز</span>
+                <span className="text-[10px] text-emerald-600/70 font-medium tracking-tight">بناءً على طلب المواطن</span>
+              </div>
+            </div>
+          )}
 
-        <div className="flex justify-between items-center mt-3">
-          <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#B2BEC3] font-medium">
-            <Clock className="w-3 h-3" />
-            <span>{report.createdAt?.seconds ? new Date(report.createdAt.seconds * 1000).toLocaleDateString('ar-SA') : 'الآن'}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={handleShare} className="text-[#B2BEC3] hover:text-[#2D3436] transition-colors" title="مشاركة">
-              <Share2 className="w-4 h-4" />
-            </button>
-            {isMine && !isResolved && (
-              <button onClick={handleDelete} className="text-[#B2BEC3] hover:text-red-500 transition-colors" title="حذف">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
+          <div className="flex justify-between items-center mt-auto pt-3 border-t border-slate-50">
+            <div className="flex items-center gap-3 text-[11px] text-slate-400 font-semibold tracking-tight">
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3 opacity-70" />
+                <span>{report.createdAt?.seconds ? new Date(report.createdAt.seconds * 1000).toLocaleDateString('ar-SA') : 'الآن'}</span>
+              </div>
+            </div>
 
-            {!isResolved && (
-              <button 
-                onClick={() => onSupport(report.id)}
-                className="flex items-center gap-1 text-[#FF6321] font-bold text-xs hover:bg-[#FF6321]/10 px-2 py-1 rounded transition-colors"
-              >
-                <ThumbsUp className="w-3 h-3" />
-                {report.supportCount || 0} تأييد
-              </button>
-            )}
-            
-            {isAuthority && !isResolved && (
-              <button 
-                onClick={() => setResolving(true)}
-                className="flex items-center gap-1 bg-[#2ECC71] text-white font-bold text-xs px-2 py-1 rounded hover:bg-[#27ae60] transition-colors"
-              >
-                <ShieldCheck className="w-3 h-3" /> إغلاق وتوثيق
-              </button>
-            )}
-            
-            {isResolved && isMine && !report.rating && (
-               <button 
-                onClick={() => setIsRatingOpen(!isRatingOpen)}
-                className="flex items-center gap-1 bg-[#F4F7F6] text-[#FF6321] border border-[#FF6321]/20 font-bold text-xs px-2 py-1 rounded hover:bg-[#FF6321]/10 transition-colors"
-               >
-                 <Star className="w-3 h-3" /> تقييم الحل
-               </button>
-            )}
-            {report.rating && isAuthority && (
-               <div className="flex items-center gap-1 bg-[#FFF9E6] text-[#F39C12] font-bold text-xs px-2 py-1 rounded">
-                 <Star className="w-3 h-3 fill-current" /> {report.rating.score}/5 التقييم: {report.rating.comment}
-               </div>
-            )}
-            {report.rating && isMine && (
-               <div className="flex items-center gap-1 text-[#F39C12] font-bold text-[10px]">
-                 <CheckCircle2 className="w-3 h-3" /> شكرًا لتقييمك
-               </div>
-            )}
-          </div>
-        </div>
+            <div className="flex items-center gap-2">
+              {!isResolved && (
+                <button 
+                  onClick={() => onSupport(report.id)}
+                  className="flex items-center gap-1.5 text-brand-orange bg-brand-orange/5 hover:bg-brand-orange/10 px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all active:scale-95"
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                  {report.supportCount || 0}
+                </button>
+              )}
+              
+              {isAuthority && !isResolved && (
+                <button 
+                  onClick={() => setResolving(true)}
+                  className="flex items-center gap-1 bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-xl hover:bg-emerald-600 transition-colors shadow-sm"
+                >
+                  إغلاق وتحقق
+                </button>
+              )}
 
-        {isRatingOpen && (
-          <div className="mt-3 p-3 bg-white border border-[#E0E0E0] rounded-xl flex flex-col gap-2">
-            <p className="text-xs font-bold text-[#2D3436]">أضف تعليقك وتقييمك لعمل الجهة الخدمية</p>
-            <input 
-              type="text" 
-              placeholder="اكتب تعليقك هنا..." 
-              value={ratingInput}
-              onChange={(e) => setRatingInput(e.target.value)}
-              className="text-sm p-2 bg-[#F8F9FA] border border-[#E0E0E0] rounded-md outline-none focus:border-[#FF6321]"
-            />
-            <div className="flex items-center gap-2 mt-1">
-              <button onClick={submitRating} className="flex-1 bg-[#FF6321] text-white text-xs py-1.5 rounded-lg font-bold">إرسال</button>
-              <button onClick={() => alert("جاري تسجيل التقييم الصوتي...")} className="flex-1 border border-[#FF6321] text-[#FF6321] text-xs py-1.5 rounded-lg font-bold flex items-center justify-center gap-1"><Mic className="w-3 h-3"/> صوت</button>
+              <div className="h-4 w-px bg-slate-100 mx-1" />
+
+              <div className="flex items-center gap-1">
+                <button onClick={() => {
+                   if (navigator.share) {
+                     navigator.share({ title: 'بلاغ بلّغ', text: report.description, url: window.location.href });
+                   }
+                }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all">
+                  <Share2 className="w-4 h-4" />
+                </button>
+                {isMine && !isResolved && (
+                  <button 
+                    onClick={() => window.confirm('حذف البلاغ؟') && reportService.deleteReport(report.id)} 
+                    className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isRatingOpen && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="pt-4 mt-2 border-t border-slate-50 flex flex-col gap-3">
+              <p className="text-xs font-bold text-slate-700">أضف تعليقك وتقييمك لعمل الجهة الخدمية</p>
+              <input 
+                type="text" 
+                placeholder="اكتب تعليقك هنا..." 
+                value={ratingInput}
+                onChange={(e) => setRatingInput(e.target.value)}
+                className="text-sm p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand-orange transition-colors"
+              />
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    reportService.rateReport(report.id, { score: 5, comment: ratingInput });
+                    setIsRatingOpen(false);
+                  }} 
+                  className="flex-1 bg-brand-orange text-white text-xs py-2.5 rounded-xl font-bold active:scale-95 transition-all"
+                >
+                  إرسال التقييم
+                </button>
+                <button 
+                  onClick={() => setIsRatingOpen(false)} 
+                  className="px-4 py-2.5 bg-slate-100 text-slate-500 text-xs rounded-xl font-bold"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </motion.div>
         )}
 
         {resolving && (
-          <div className="mt-3 p-3 bg-white border border-[#E0E0E0] rounded-xl flex flex-col gap-2">
-            <p className="text-xs font-bold text-[#2D3436]">إرفاق صورة بعد المعالجة</p>
-            <div className="flex gap-2">
-              <button onClick={handleResolveSubmit} className="flex-1 bg-[#FF6321] text-white text-xs py-1.5 rounded-lg font-bold">حفظ</button>
-              <button onClick={() => setResolving(false)} className="flex-1 bg-gray-100 text-gray-600 text-xs py-1.5 rounded-lg font-bold">إلغاء</button>
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="pt-4 mt-2 border-t border-slate-50 flex flex-col gap-3">
+              <p className="text-xs font-bold text-slate-700">إرفاق صورة بعد المعالجة وتأكيد الحل</p>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    onResolve(report.id, "https://images.unsplash.com/photo-1574686020524-192a543666b3?auto=format&fit=crop&q=80&w=400");
+                    setResolving(false);
+                  }} 
+                  className="flex-1 bg-emerald-500 text-white text-xs py-2.5 rounded-xl font-bold active:scale-95 transition-all"
+                >
+                  حفظ وتوثيق الحل
+                </button>
+                <button 
+                  onClick={() => setResolving(false)} 
+                  className="px-4 py-2.5 bg-slate-100 text-slate-500 text-xs rounded-xl font-bold"
+                >
+                  إلغاء
+                </button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -865,10 +896,10 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-[#F4F7F6] font-sans text-[#2D3436]" dir="rtl">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-brand-orange/10 transition-colors duration-300" dir="rtl">
       <Header user={user} profile={profile} onSignOut={() => signOut(auth)} currentTab={tab} setTab={setTab} />
 
-      <main className="max-w-[1024px] mx-auto p-4 md:p-8 pb-32">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 pb-32">
         <AnimatePresence mode="wait">
           {tab === 'home' && (
             <motion.div key="home" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}}>
@@ -877,17 +908,19 @@ export default function App() {
                 
                 <div className="lg:col-span-7 flex flex-col gap-6">
                   {/* Reporting Area */}
-                  <div className="bg-white rounded-3xl p-8 shadow-sm border border-[#E0E0E0] flex flex-col gap-6 relative overflow-hidden">
-                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-[#FF6321]/5 rounded-full blur-3xl"></div>
-                    <div>
-                      <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">صوتك يوصل... حيّك يتحسن</h2>
-                      <p className="text-[#636E72] text-sm">لديك مشكلة في الحي؟ اضغط أدناه وبلّغ.</p>
+                  <div className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-6 relative overflow-hidden group">
+                    <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-orange/5 rounded-full blur-3xl group-hover:bg-brand-orange/10 transition-colors duration-500"></div>
+                    <div className="relative z-10">
+                      <h2 className="text-2xl font-extrabold text-slate-900 mb-3 tracking-tight">صوتك يوصل... حيّك يتحسن</h2>
+                      <p className="text-slate-500 text-base leading-relaxed max-w-md">
+                        لديك مشكلة في الحي؟ التقط صورة أو سجل صوتك وسنتولى الباقي باستخدام تقنيات الذكاء الاصطناعي.
+                      </p>
                     </div>
                     <button 
                       onClick={() => setShowModal(true)}
-                      className="w-full py-5 border-2 border-dashed border-[#FF6321] bg-[#FF6321]/5 text-[#FF6321] hover:bg-[#FF6321]/10 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-colors"
+                      className="relative z-10 w-full py-6 border-2 border-dashed border-brand-orange/30 bg-brand-orange/5 text-brand-orange hover:bg-brand-orange/10 hover:border-brand-orange/50 rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99]"
                     >
-                      <Plus className="w-6 h-6 border-2 border-current rounded-full" />
+                      <Plus className="w-8 h-8 p-1.5 border-2 border-current rounded-full" />
                       إنشاء بلاغ جديد
                     </button>
                   </div>
@@ -898,35 +931,28 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-5 bg-white rounded-3xl shadow-sm border border-[#E0E0E0] flex flex-col overflow-hidden max-h-[800px]">
-                  <div className="p-4 border-b border-[#F0F0F0] bg-white sticky top-0 z-10">
-                    <h3 className="font-bold text-lg text-[#1A1A1A] mb-3">آخر البلاغات بمنطقتك</h3>
-                    <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                <div className="lg:col-span-5 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col overflow-hidden max-h-[800px]">
+                  <div className="p-6 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                    <h3 className="font-extrabold text-xl text-slate-900 mb-4 tracking-tight text-right">آخر البلاغات بمنطقتك</h3>
+                    <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
                       <select 
-                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]" 
+                        className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none" 
                         value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
                       >
                         <option value="all">كل الفئات</option>
                         {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                       <select 
-                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]"
+                        className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none"
                         value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
                       >
                         <option value="all">كل الحالات</option>
                         {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
                       </select>
-                      <select 
-                        className="text-xs bg-[#F8F9FA] border border-[#E0E0E0] rounded-lg px-2 py-1 outline-none text-[#2D3436]"
-                        value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}
-                      >
-                        <option value="all">كل الأولويات</option>
-                        {Object.values(ReportPriority).map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
                     </div>
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#F4F7F6]/30">
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 bg-slate-50/30">
                     {filteredReports.length === 0 ? (
                       <p className="text-center text-[#B2BEC3] py-10">لا توجد بلاغات تطابق البحث...</p>
                     ) : (
@@ -988,18 +1014,22 @@ export default function App() {
       </main>
 
       {/* Mobile Sticky Nav */}
-      <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white px-6 py-3 rounded-full flex gap-8 shadow-xl border border-[#E0E0E0] z-40">
+      <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-lg px-6 py-3 rounded-2xl flex gap-10 shadow-2xl shadow-slate-200/50 border border-slate-200/60 z-50">
         {[
-          { id: 'home', icon: <Activity className="w-6 h-6" /> },
-          { id: 'map', icon: <MapIcon className="w-6 h-6" /> },
-          { id: 'support', icon: <Heart className="w-6 h-6" /> }
+          { id: 'home', icon: <Activity className="w-6 h-6" />, label: 'الرئيسية' },
+          { id: 'map', icon: <MapIcon className="w-6 h-6" />, label: 'الخريطة' },
+          { id: 'support', icon: <Heart className="w-6 h-6" />, label: 'الدعم' }
         ].map(item => (
           <button 
             key={item.id} 
             onClick={() => setTab(item.id)}
-            className={`transition-colors ${tab === item.id ? 'text-[#FF6321] scale-110' : 'text-[#B2BEC3]'}`}
+            className={cn(
+              "flex flex-col items-center gap-1 transition-all duration-300",
+              tab === item.id ? "text-brand-orange scale-110" : "text-slate-400 hover:text-slate-600"
+            )}
           >
             {item.icon}
+            <span className="text-[10px] font-bold tracking-tight">{item.label}</span>
           </button>
         ))}
       </nav>
