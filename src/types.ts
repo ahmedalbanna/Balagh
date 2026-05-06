@@ -59,3 +59,18 @@ export interface UserProfile {
   points?: number;
   tier?: string;
 }
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  type: string;
+  category: 'project' | 'success' | 'initiative';
+  img: string;
+  author?: string;
+  stats?: {
+    views?: number;
+    hearts?: number;
+  };
+}

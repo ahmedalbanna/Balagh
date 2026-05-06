@@ -25,7 +25,13 @@ import {
   Trash2,
   Filter,
   MessageSquare,
-  Medal
+  Medal,
+  ChevronRight,
+  ArrowRight,
+  MapPin,
+  Calendar,
+  Eye,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './lib/firebase.ts';
@@ -36,7 +42,7 @@ import {
   signOut 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { Report, UserProfile, ReportStatus, ReportPriority, ReportCategory } from './types.ts';
+import { Report, UserProfile, ReportStatus, ReportPriority, ReportCategory, NewsItem } from './types.ts';
 import { reportService } from './services/reportService.ts';
 import { classifyReport } from './services/geminiService.ts';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
@@ -153,7 +159,7 @@ function Header({ user, profile, onSignOut, currentTab, setTab }: { user: any; p
   );
 }
 
-function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: string | number; report: Report; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void }) {
+function ReportCard({ report, onSupport, isAuthority, onResolve, onClick }: { key?: string | number; report: Report; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void; onClick: (r: Report) => void }) {
   const [resolving, setResolving] = useState(false);
   const [ratingInput, setRatingInput] = useState('');
   const [isRatingOpen, setIsRatingOpen] = useState(false);
@@ -177,8 +183,10 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: strin
   const isMine = report.userId === auth.currentUser?.uid;
 
   return (
-    <div className={cn(
-      "group relative p-5 rounded-3xl bg-white border border-slate-100 flex flex-col gap-4 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/40 hover:border-slate-200",
+    <div 
+      onClick={() => onClick(report)}
+      className={cn(
+      "group relative p-5 rounded-3xl bg-white border border-slate-100 flex flex-col gap-4 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/40 hover:border-slate-200 cursor-pointer",
       isResolved && "bg-slate-50/50 grayscale-[0.3]",
       isDelayed && "border-rose-200 bg-rose-50/10"
     )}>
@@ -237,7 +245,7 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: strin
             <div className="flex items-center gap-2">
               {!isResolved && (
                 <button 
-                  onClick={() => onSupport(report.id)}
+                  onClick={(e) => { e.stopPropagation(); onSupport(report.id); }}
                   className="flex items-center gap-1.5 text-brand-orange bg-brand-orange/5 hover:bg-brand-orange/10 px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all active:scale-95"
                 >
                   <ThumbsUp className="w-3.5 h-3.5" />
@@ -247,7 +255,7 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: strin
               
               {isAuthority && !isResolved && (
                 <button 
-                  onClick={() => setResolving(true)}
+                  onClick={(e) => { e.stopPropagation(); setResolving(true); }}
                   className="flex items-center gap-1 bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-xl hover:bg-emerald-600 transition-colors shadow-sm"
                 >
                   إغلاق وتحقق
@@ -257,7 +265,8 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: strin
               <div className="h-4 w-px bg-slate-100 mx-1" />
 
               <div className="flex items-center gap-1">
-                <button onClick={() => {
+                <button onClick={(e) => {
+                   e.stopPropagation();
                    if (navigator.share) {
                      navigator.share({ title: 'بلاغ بلّغ', text: report.description, url: window.location.href });
                    }
@@ -266,7 +275,7 @@ function ReportCard({ report, onSupport, isAuthority, onResolve }: { key?: strin
                 </button>
                 {isMine && !isResolved && (
                   <button 
-                    onClick={() => window.confirm('حذف البلاغ؟') && reportService.deleteReport(report.id)} 
+                    onClick={(e) => { e.stopPropagation(); if (window.confirm('حذف البلاغ؟')) reportService.deleteReport(report.id); }} 
                     className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -672,13 +681,43 @@ function MapView({ reports }: { reports: Report[] }) {
   );
 }
 
-function NewsView() {
+function NewsView({ onSelect }: { onSelect: (n: NewsItem) => void }) {
   const [filter, setFilter] = useState('all');
 
-  const news = [
-    { title: "حملة تنظيف كبرى في حي الروضة", date: "منذ ساعتين", type: "مشروع حي", category: "project", img: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400" },
-    { title: "إصلاح خط المياه الرئيسي بالستين", date: "أمس", type: "قصة نجاح 'بلّغ'", category: "success", img: "https://images.unsplash.com/photo-1541888086925-920a0b63f538?auto=format&fit=crop&q=80&w=400" },
-    { title: "مبادرة تشجير الشوارع الرئيسية", date: "منذ 3 أيام", type: "مبادرة", category: "initiative", img: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&q=80&w=400" }
+  const news: NewsItem[] = [
+    { 
+      id: '1',
+      title: "حملة تنظيف كبرى في حي الروضة", 
+      date: "منذ ساعتين", 
+      type: "مشروع حي", 
+      category: "project", 
+      img: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15f?auto=format&fit=crop&q=80&w=400",
+      content: "بدأت اليوم حملة تنظيف واسعة النطاق في حي الروضة بمشاركة العشرات من المتطوعين من أهالي الحي وبالتنسيق مع صندوق النظافة والتحسين. تهدف الحملة إلى إزالة المخلفات المتراكمة في الشوارع الفرعية وتوعية السكان بأهمية الحفاظ على المظهر الجمالي للحي. وتأتي هذه الخطوة استجابة لعدة بلاغات تم تقديمها عبر منصة 'بلّغ'.",
+      author: "لجنة حي الروضة",
+      stats: { views: 450, hearts: 85 }
+    },
+    { 
+      id: '2',
+      title: "إصلاح خط المياه الرئيسي بالستين", 
+      date: "أمس", 
+      type: "قصة نجاح 'بلّغ'", 
+      category: "success", 
+      img: "https://images.unsplash.com/photo-1541888086925-920a0b63f538?auto=format&fit=crop&q=80&w=400",
+      content: "أنهت الفرق الفنية بمؤسسة المياه إصلاح الكسر المفاجئ في الخط الرئيسي بشارع الستين بعد 48 ساعة من الإبلاغ عنه عبر المنصة. يذكر أن الكسر كان يتسبب في ضياع كميات كبيرة من المياه وتضرر الأسفلت في المنطقة المحيطة. نشكر سرعة استجابة الجهات المعنية وتفاعلهم مع صوت المواطن.",
+      author: "مؤسسة المياه",
+      stats: { views: 820, hearts: 120 }
+    },
+    { 
+      id: '3',
+      title: "مبادرة تشجير الشوارع الرئيسية", 
+      date: "منذ 3 أيام", 
+      type: "مبادرة", 
+      category: "initiative", 
+      img: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&q=80&w=400",
+      content: "بتمويل مجتمعي من خلال صندوق دعم الحي، تم البدء في مشروع تشجير الجزر الوسطية في الشوارع الرئيسية للحي. المرحلة الأولى تستهدف زراعة 200 شتلة من الأشجار المناسبة للمناخ المحلي. ندعو جميع السكان للمشاركة في العناية بهذه الأشجار لضمان نموها واستدامتها كجزء من المظهر الجمالي لمدينتنا.",
+      author: "متطوعو الروضة",
+      stats: { views: 310, hearts: 64 }
+    }
   ];
 
   const filteredNews = filter === 'all' ? news : news.filter(n => n.category === filter);
@@ -693,7 +732,11 @@ function NewsView() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {filteredNews.map((item, i) => (
-          <div key={i} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[#E0E0E0] group cursor-pointer hover:shadow-md transition-all">
+          <div 
+            key={i} 
+            onClick={() => onSelect(item)}
+            className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[#E0E0E0] group cursor-pointer hover:shadow-md transition-all"
+          >
             <div className="h-48 overflow-hidden relative">
               <img src={item.img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-[#FF6321]">{item.type}</div>
@@ -708,6 +751,255 @@ function NewsView() {
         ))}
       </div>
     </div>
+  );
+}
+
+function ReportDetailsView({ report, onBack, onSupport, isAuthority, onResolve }: { report: Report; onBack: () => void; onSupport: (id: string) => void; isAuthority: boolean; onResolve: (id: string, img: string) => void }) {
+  const statusColors = {
+    [ReportStatus.PENDING]: 'bg-rose-50 text-rose-600 border-rose-100',
+    [ReportStatus.ACKNOWLEDGED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    [ReportStatus.IN_PROGRESS]: 'bg-amber-50 text-amber-700 border-amber-100',
+    [ReportStatus.RESOLVED]: 'bg-emerald-50 text-emerald-600 border-emerald-100'
+  };
+
+  const statusText = {
+    [ReportStatus.PENDING]: 'جديد',
+    [ReportStatus.ACKNOWLEDGED]: 'تم الاستلام',
+    [ReportStatus.IN_PROGRESS]: 'جاري المعالجة',
+    [ReportStatus.RESOLVED]: 'تم الحل'
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-all w-fit">
+        <ArrowRight className="w-5 h-5" /> عودة للقائمة
+      </button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <div className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/40">
+            <div className="h-[300px] sm:h-[400px] bg-slate-100 relative">
+              {report.imageUrl ? (
+                <img src={report.imageUrl} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                  <ImageIcon className="w-20 h-20 mb-2" />
+                  <span className="font-bold">بدون صورة مرفقة</span>
+                </div>
+              )}
+              <div className="absolute top-6 right-6">
+                <span className={cn("px-4 py-2 rounded-xl text-xs font-black border shadow-lg backdrop-blur-md", statusColors[report.status])}>
+                  {statusText[report.status]}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-8 md:p-10">
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <span className="bg-brand-orange/10 text-brand-orange px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+                  {report.category}
+                </span>
+                <span className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-black text-white",
+                  report.priority === ReportPriority.CRITICAL ? "bg-rose-500" : 
+                  report.priority === ReportPriority.HIGH ? "bg-brand-orange" : "bg-slate-400"
+                )}>
+                  أولوية {report.priority}
+                </span>
+              </div>
+
+              <h1 className="text-3xl font-black text-slate-900 mb-6 leading-tight">
+                {report.description}
+              </h1>
+
+              {report.voiceUrl && (
+                <div className="mb-8 p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-6">
+                  <button className="w-14 h-14 bg-brand-orange text-white rounded-full flex items-center justify-center shadow-lg shadow-brand-orange/30 hover:scale-105 transition-transform">
+                    <Play className="w-6 h-6 ml-1 fill-current" />
+                  </button>
+                  <div className="flex-1">
+                    <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
+                       <span>التسجيل الصوتي للبلاغ</span>
+                       <span>0:24</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                       <div className="h-full bg-brand-orange w-1/3"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {report.status === ReportStatus.RESOLVED && report.resolvedImageUrl && (
+                <div className="mt-8 p-10 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-full"></div>
+                  <h3 className="text-2xl font-black text-emerald-900 mb-6 flex items-center gap-3">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                    تم إنجاز المهمة بنجاح
+                  </h3>
+                  <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-lg border-4 border-white mb-6">
+                     <img src={report.resolvedImageUrl} className="w-full h-full object-cover" />
+                  </div>
+                  <p className="text-emerald-700 font-bold leading-relaxed">
+                    تمت معالجة المشكلة المذكورة في البلاغ من قبل الفرق الميدانية وتوثيق الحل بالصورة أعلاه. شكراً لمساهمتك في تحسين حيك.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-8">
+          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/40">
+             <h3 className="font-black text-xl text-slate-900 mb-6 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-brand-orange" />
+                الموقع الجغرافي
+             </h3>
+             <div className="h-48 rounded-2xl overflow-hidden border border-slate-200 mb-4">
+                <MapContainer center={[report.location.lat, report.location.lng]} zoom={15} className="w-full h-full z-0">
+                  <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                  <Marker position={[report.location.lat, report.location.lng]} />
+                </MapContainer>
+             </div>
+             <p className="text-sm font-bold text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                {report.location.address || "العنوان غير محدد بدقة"}
+             </p>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/40">
+             <h3 className="font-black text-xl text-slate-900 mb-6 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-brand-orange" />
+                التفاعل المجتمعي
+             </h3>
+             <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between p-4 bg-brand-orange/5 rounded-2xl border border-brand-orange/10">
+                   <div className="flex flex-col">
+                      <span className="text-2xl font-black text-brand-orange">{report.supportCount || 0}</span>
+                      <span className="text-[10px] font-bold text-brand-orange/70">أصوات مؤيدة</span>
+                   </div>
+                   <button 
+                     onClick={() => onSupport(report.id)}
+                     className="bg-brand-orange text-white px-6 py-3 rounded-xl font-black text-sm shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95 transition-all"
+                   >
+                     أنا أيضاً أعاني
+                   </button>
+                </div>
+
+                <div className="space-y-4">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">التاريخ الزمني للبلاغ</p>
+                   <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                      <div className="relative flex gap-4">
+                         <div className="absolute -left-[23px] w-3 h-3 rounded-full bg-brand-orange ring-4 ring-white"></div>
+                         <div className="flex flex-col">
+                            <span className="text-xs font-black text-slate-900">تم إنشاء البلاغ</span>
+                            <span className="text-[10px] font-bold text-slate-400">{report.createdAt?.seconds ? new Date(report.createdAt.seconds * 1000).toLocaleString('ar-SA') : 'الآن'}</span>
+                         </div>
+                      </div>
+                      {report.status !== ReportStatus.PENDING && (
+                        <div className="relative flex gap-4">
+                           <div className="absolute -left-[23px] w-3 h-3 rounded-full bg-brand-orange ring-4 ring-white"></div>
+                           <div className="flex flex-col">
+                              <span className="text-xs font-black text-slate-900">تم استلام البلاغ من الجهات المختصة</span>
+                              <span className="text-[10px] font-bold text-slate-400">منذ يومين</span>
+                           </div>
+                        </div>
+                      )}
+                      {report.status === ReportStatus.RESOLVED && (
+                        <div className="relative flex gap-4">
+                           <div className="absolute -left-[23px] w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-white"></div>
+                           <div className="flex flex-col">
+                              <span className="text-xs font-black text-emerald-600">تم إغلاق البلاغ بنجاح</span>
+                              <span className="text-[10px] font-bold text-slate-400">اليوم</span>
+                           </div>
+                        </div>
+                      )}
+                   </div>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function NewsDetailsView({ news, onBack }: { news: NewsItem; onBack: () => void }) {
+  return (
+    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="max-w-4xl mx-auto flex flex-col gap-8">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-all w-fit">
+        <ArrowRight className="w-5 h-5" /> عودة للأخبار
+      </button>
+
+      <div className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl shadow-slate-200/50">
+        <div className="h-[400px] relative">
+          <img src={news.img} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+          <div className="absolute bottom-10 inset-x-10">
+             <span className="bg-brand-orange px-4 py-1.5 rounded-full text-white text-[10px] font-black uppercase tracking-widest mb-4 inline-block">
+                {news.type}
+             </span>
+             <h1 className="text-4xl font-black text-white leading-tight">
+                {news.title}
+             </h1>
+          </div>
+        </div>
+
+        <div className="p-10 md:p-14">
+          <div className="flex items-center justify-between mb-10 pb-8 border-b border-slate-50">
+             <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-brand-orange/10 flex items-center justify-center text-brand-orange">
+                   <UserIcon className="w-6 h-6" />
+                </div>
+                <div className="flex flex-col">
+                   <span className="text-sm font-black text-slate-900">{news.author}</span>
+                   <span className="text-xs font-bold text-slate-400">ناشر الخبر</span>
+                </div>
+             </div>
+             <div className="flex items-center gap-8">
+                <div className="flex flex-col items-center">
+                   <Calendar className="w-5 h-5 text-slate-300 mb-1" />
+                   <span className="text-[10px] font-black text-slate-500">{news.date}</span>
+                </div>
+                <div className="flex flex-col items-center">
+                   <Eye className="w-5 h-5 text-slate-300 mb-1" />
+                   <span className="text-[10px] font-black text-slate-500">{news.stats?.views} مشاهدة</span>
+                </div>
+                <div className="flex flex-col items-center">
+                   <Heart className="w-5 h-5 text-slate-300 mb-1" />
+                   <span className="text-[10px] font-black text-slate-500">{news.stats?.hearts} إعجاب</span>
+                </div>
+             </div>
+          </div>
+
+          <div className="prose prose-slate max-w-none">
+             <p className="text-xl text-slate-700 leading-relaxed font-medium mb-8">
+                {news.content}
+             </p>
+             <p className="text-lg text-slate-600 leading-relaxed">
+                هذا الخبر يعكس الجهود المستمرة لتحسين جودة الحياة في أحيائنا. نحن نشجع الجميع على الاستمرار في استخدام منصة "بلّغ" لإيصال أصواتهم والمساهمة في رصد المشاكل واقتراح الحلول.
+             </p>
+          </div>
+
+          <div className="mt-14 pt-10 border-t border-slate-50 flex flex-wrap items-center justify-between gap-6">
+             <div className="flex items-center gap-2">
+                <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-orange text-white font-black text-sm shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95 transition-all">
+                   <Heart className="w-5 h-5" /> دعم الخبر
+                </button>
+                <button className="w-12 h-12 rounded-2xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-all">
+                   <Share2 className="w-5 h-5" />
+                </button>
+             </div>
+             
+             <div className="flex items-center gap-4">
+                <span className="text-xs font-bold text-slate-400">هل كان هذا الخبر مفيداً؟</span>
+                <div className="flex gap-2">
+                   <button className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">نعم</button>
+                   <button className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center font-bold">لا</button>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -783,6 +1075,9 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('home');
+
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   // Filters
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -897,110 +1192,138 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-brand-orange/10 transition-colors duration-300" dir="rtl">
-      <Header user={user} profile={profile} onSignOut={() => signOut(auth)} currentTab={tab} setTab={setTab} />
+      <Header user={user} profile={profile} onSignOut={() => signOut(auth)} currentTab={tab} setTab={(t) => { setTab(t); setSelectedReport(null); setSelectedNews(null); }} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 pb-32">
         <AnimatePresence mode="wait">
           {tab === 'home' && (
             <motion.div key="home" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}}>
-              {/* Main Dashboard Layout from Mockup */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                <div className="lg:col-span-7 flex flex-col gap-6">
-                  {/* Reporting Area */}
-                  <div className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-6 relative overflow-hidden group">
-                    <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-orange/5 rounded-full blur-3xl group-hover:bg-brand-orange/10 transition-colors duration-500"></div>
-                    <div className="relative z-10">
-                      <h2 className="text-2xl font-extrabold text-slate-900 mb-3 tracking-tight">صوتك يوصل... حيّك يتحسن</h2>
-                      <p className="text-slate-500 text-base leading-relaxed max-w-md">
-                        لديك مشكلة في الحي؟ التقط صورة أو سجل صوتك وسنتولى الباقي باستخدام تقنيات الذكاء الاصطناعي.
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => setShowModal(true)}
-                      className="relative z-10 w-full py-6 border-2 border-dashed border-brand-orange/30 bg-brand-orange/5 text-brand-orange hover:bg-brand-orange/10 hover:border-brand-orange/50 rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99]"
-                    >
-                      <Plus className="w-8 h-8 p-1.5 border-2 border-current rounded-full" />
-                      إنشاء بلاغ جديد
-                    </button>
-                  </div>
+              {selectedReport ? (
+                <ReportDetailsView 
+                  report={selectedReport} 
+                  onBack={() => setSelectedReport(null)}
+                  onSupport={(id) => { reportService.supportReport(id).catch(console.error); }}
+                  isAuthority={isAuthority}
+                  onResolve={handleResolve}
+                />
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                   
-                  {/* Embedded Map */}
-                  <div className="hidden lg:block relative z-0">
-                    <MapView reports={filteredReports} />
+                  <div className="lg:col-span-7 flex flex-col gap-6">
+                    {/* Reporting Area */}
+                    <div className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-6 relative overflow-hidden group">
+                      <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-orange/5 rounded-full blur-3xl group-hover:bg-brand-orange/10 transition-colors duration-500"></div>
+                      <div className="relative z-10">
+                        <h2 className="text-2xl font-extrabold text-slate-900 mb-3 tracking-tight">صوتك يوصل... حيّك يتحسن</h2>
+                        <p className="text-slate-500 text-base leading-relaxed max-w-md">
+                          لديك مشكلة في الحي؟ التقط صورة أو سجل صوتك وسنتولى الباقي باستخدام تقنيات الذكاء الاصطناعي.
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setShowModal(true)}
+                        className="relative z-10 w-full py-6 border-2 border-dashed border-brand-orange/30 bg-brand-orange/5 text-brand-orange hover:bg-brand-orange/10 hover:border-brand-orange/50 rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        <Plus className="w-8 h-8 p-1.5 border-2 border-current rounded-full" />
+                        إنشاء بلاغ جديد
+                      </button>
+                    </div>
+                    
+                    {/* Embedded Map */}
+                    <div className="hidden lg:block relative z-0">
+                      <MapView reports={filteredReports} />
+                    </div>
                   </div>
-                </div>
 
-                <div className="lg:col-span-5 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col overflow-hidden max-h-[800px]">
-                  <div className="p-6 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                    <h3 className="font-extrabold text-xl text-slate-900 mb-4 tracking-tight text-right">آخر البلاغات بمنطقتك</h3>
-                    <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
-                      <select 
-                        className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none" 
-                        value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-                      >
-                        <option value="all">كل الفئات</option>
-                        {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <select 
-                        className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none"
-                        value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                      >
-                        <option value="all">كل الحالات</option>
-                        {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
-                      </select>
+                  <div className="lg:col-span-5 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col overflow-hidden max-h-[800px]">
+                    <div className="p-6 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                      <h3 className="font-extrabold text-xl text-slate-900 mb-4 tracking-tight text-right">آخر البلاغات بمنطقتك</h3>
+                      <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
+                        <select 
+                          className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none" 
+                          value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                        >
+                          <option value="all">كل الفئات</option>
+                          {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select 
+                          className="text-[11px] font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 outline-none text-slate-600 focus:border-brand-orange/30 transition-colors cursor-pointer appearance-none"
+                          value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                          <option value="all">كل الحالات</option>
+                          {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 bg-slate-50/30">
+                      {filteredReports.length === 0 ? (
+                        <p className="text-center text-[#B2BEC3] py-10">لا توجد بلاغات تطابق البحث...</p>
+                      ) : (
+                        filteredReports.map(report => (
+                          <ReportCard 
+                            key={report.id} 
+                            report={report as Report} 
+                            onSupport={(id) => { reportService.supportReport(id).catch(console.error); }} 
+                            isAuthority={isAuthority}
+                            onResolve={handleResolve}
+                            onClick={setSelectedReport}
+                          />
+                        ))
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 bg-slate-50/30">
-                    {filteredReports.length === 0 ? (
-                      <p className="text-center text-[#B2BEC3] py-10">لا توجد بلاغات تطابق البحث...</p>
-                    ) : (
-                      filteredReports.map(report => (
-                        <ReportCard 
-                          key={report.id} 
-                          report={report as Report} 
-                          onSupport={(id) => { reportService.supportReport(id).catch(console.error); }} 
-                          isAuthority={isAuthority}
-                          onResolve={handleResolve}
-                        />
-                      ))
-                    )}
-                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
 
           {tab === 'map' && (
             <motion.div key="map" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}}>
-              <div className="flex gap-2 mb-4">
-                <select 
-                  className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]" 
-                  value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-                >
-                  <option value="all">كل الفئات</option>
-                  {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select 
-                  className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]"
-                  value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="all">كل الحالات</option>
-                  {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
-                </select>
-              </div>
-              <MapView reports={filteredReports} />
+              {selectedReport ? (
+                 <ReportDetailsView 
+                   report={selectedReport} 
+                   onBack={() => setSelectedReport(null)}
+                   onSupport={(id) => { reportService.supportReport(id).catch(console.error); }}
+                   isAuthority={isAuthority}
+                   onResolve={handleResolve}
+                 />
+              ) : (
+                <>
+                  <div className="flex gap-2 mb-4">
+                    <select 
+                      className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]" 
+                      value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                    >
+                      <option value="all">كل الفئات</option>
+                      {Object.values(ReportCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select 
+                      className="text-sm bg-white border border-[#E0E0E0] rounded-xl px-4 py-2 outline-none text-[#2D3436]"
+                      value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                      <option value="all">كل الحالات</option>
+                      {Object.values(ReportStatus).map(s => <option key={s} value={s}>{s === ReportStatus.PENDING ? 'مفتوح' : s === ReportStatus.RESOLVED ? 'تمت المعالجة' : s}</option>)}
+                    </select>
+                  </div>
+                  <MapView reports={filteredReports} />
+                </>
+              )}
             </motion.div>
           )}
 
           {tab === 'news' && (
             <motion.div key="news" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}}>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-[#1A1A1A]">أخبار وتحديثات المشاريع</h2>
-                <p className="text-[#636E72] mt-1">تابع إنجازات حيك ومبادرات البلدية والمجتمع.</p>
-              </div>
-              <NewsView />
+              {selectedNews ? (
+                <NewsDetailsView news={selectedNews} onBack={() => setSelectedNews(null)} />
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-[#1A1A1A]">أخبار وتحديثات المشاريع</h2>
+                    <p className="text-[#636E72] mt-1">تابع إنجازات حيك ومبادرات البلدية والمجتمع.</p>
+                  </div>
+                  <NewsView onSelect={setSelectedNews} />
+                </>
+              )}
             </motion.div>
           )}
 
