@@ -502,25 +502,30 @@ function CreateReportModal({ onClose, onCreated }: { onClose: () => void; onCrea
 // --- Views ---
 
 function MapView({ reports }: { reports: Report[] }) {
-  // Center roughly on Sanaa
   const position: [number, number] = [15.3694, 44.1910];
 
-  const getMarkerColor = (status: ReportStatus) => {
-    switch(status) {
-      case ReportStatus.RESOLVED: return 120; // Green hue
-      case ReportStatus.IN_PROGRESS: return 60; // Yellow hue
-      default: return 0; // Red hue
-    }
+  const createCustomIcon = (status: ReportStatus) => {
+    let color = '#ef4444'; // Red for Pending
+    if (status === ReportStatus.IN_PROGRESS) color = '#f59e0b'; // Yellow/Orange
+    if (status === ReportStatus.RESOLVED) color = '#22c55e'; // Green
+    if (status === ReportStatus.ACKNOWLEDGED) color = '#3b82f6'; // Blue
+
+    return L.divIcon({
+      className: 'custom-div-icon',
+      html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.2);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
   };
 
   return (
     <div className="bg-white rounded-3xl p-4 shadow-sm border border-[#E0E0E0] h-[600px] flex flex-col relative z-0">
       <div className="flex justify-between items-center mb-4 px-2">
-        <h3 className="font-bold text-lg text-[#1A1A1A]">خريطة البلاغات</h3>
-        <div className="flex gap-4 text-xs font-medium text-[#636E72]">
-          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500"></div> جديد/مفتوح</span>
-          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div> جاري العمل</span>
-          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500"></div> تم الحل</span>
+        <h3 className="font-bold text-lg text-[#1A1A1A]">خريطة البلاغات في الحي</h3>
+        <div className="flex gap-4 text-[10px] sm:text-xs font-medium text-[#636E72]">
+          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500"></div> أحمر: مفتوح</span>
+          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div> أصفر: قيد العمل</span>
+          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500"></div> أخضر: تم الحل</span>
         </div>
       </div>
       <div className="flex-1 rounded-2xl overflow-hidden relative z-0 border border-[#E0E0E0]">
@@ -528,11 +533,19 @@ function MapView({ reports }: { reports: Report[] }) {
           <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
           <MarkerClusterGroup chunkedLoading>
             {reports.map(r => (
-              <Marker key={r.id} position={[r.location.lat, r.location.lng]}>
+              <Marker key={r.id} position={[r.location.lat, r.location.lng]} icon={createCustomIcon(r.status)}>
                 <Popup className="font-sans" dir="rtl">
-                  <div className="text-right">
-                    <h4 className="font-bold text-[#FF6321]">{r.category}</h4>
-                    <p className="text-xs text-[#2D3436] mt-1">{r.description}</p>
+                  <div className="text-right p-1">
+                    <div className="flex justify-between items-center mb-2">
+                       <h4 className="font-bold text-[#FF6321] text-sm">{r.category}</h4>
+                       <span className="text-[10px] text-gray-500">{r.status}</span>
+                    </div>
+                    <p className="text-xs text-[#2D3436] mb-2">{r.description}</p>
+                    {r.imageUrl && <img src={r.imageUrl} className="w-full h-20 object-cover rounded-lg mb-2" />}
+                    <div className="flex justify-between items-center text-[9px] text-gray-400">
+                      <span>{r.location.address}</span>
+                      <span className="font-bold text-orange-500">{r.supportCount} تأييد</span>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
